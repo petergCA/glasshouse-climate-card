@@ -6,7 +6,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
   const TAG = 'glasshouse-climate-card';
 
   const DEBOUNCE_MS = 800;      // set_temperature is called this long after the last change
@@ -366,7 +366,7 @@
     .stat .lbl { overflow: hidden; text-overflow: ellipsis; }
     /* read-only (no dial) cards keep the stats on narrow widths too, wrapping into as few rows as fit */
     .body.no-dial .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border);
-      grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+      grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
     .body.no-dial .stat .v { font-size: clamp(17px, 4.2cqi, 22px); }
     .body.no-dial .stat .lbl { white-space: nowrap; letter-spacing: .04em; font-size: 10px; }
     /* narrow: outside and humidity are already in the header chips, so the stats row drops them to stay on one line */
