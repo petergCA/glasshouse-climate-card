@@ -1,12 +1,12 @@
 /*!
- * Glasshouse Climate Card v1.1.0
+ * Glasshouse Climate Card v1.2.0
  * A dial thermostat for one HVAC zone, with the zone's rooms beside it.
  * Part of the Glasshouse card suite. MIT License (c) 2026 Peter Gray.
  */
 (() => {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const TAG = 'glasshouse-climate-card';
 
   const DEBOUNCE_MS = 800;      // set_temperature is called this long after the last change
@@ -173,6 +173,8 @@
     /* ---------- body layout ---------- */
     .body { position: relative; display: grid; gap: 14px 22px; margin-top: 10px; grid-template-columns: minmax(0, 1fr); }
     .left { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; }
+    /* show_dial: false — a read-only zone summary: stats and rooms, no controls (e.g. when an automation owns the setpoint) */
+    .body.no-dial > .left { display: none; }
     .right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
     @container gh-clim (min-width: 640px) {
       .body.has-rooms { grid-template-columns: minmax(280px, 330px) minmax(0, 1fr); align-items: center; }
@@ -180,6 +182,8 @@
         align-self: stretch; justify-content: center;
         padding-left: 22px; border-left: 1px solid var(--gh-border);
       }
+      .body.has-rooms.no-dial { grid-template-columns: minmax(0, 1fr); }
+      .body.has-rooms.no-dial .right { padding-left: 0; border-left: none; }
     }
 
     /* ---------- dial ---------- */
@@ -495,7 +499,7 @@
       if (typeof config.entity !== 'string' || !config.entity.startsWith('climate.')) {
         throw new Error('glasshouse-climate-card: "entity" must be a climate entity id (climate.xxx)');
       }
-      for (const k of ['humidity', 'outside']) {
+      for (const k of ['humidity', 'outside', 'target', 'feels_like']) {
         if (config[k] !== undefined && (typeof config[k] !== 'string' || !config[k].includes('.'))) {
           throw new Error(`glasshouse-climate-card: "${k}" must be an entity id`);
         }
@@ -514,9 +518,9 @@
         throw new Error('glasshouse-climate-card: "scale" must be a positive number of degrees');
       }
       this._config = {
-        show_modes: true, show_fan: false, ...config, rooms,
+        show_modes: true, show_fan: false, show_dial: true, ...config, rooms,
       };
-      this._watch = [config.entity, config.humidity, config.outside, ...rooms.map((r) => r.entity)].filter(Boolean);
+      this._watch = [config.entity, config.humidity, config.outside, config.target, config.feels_like, ...rooms.map((r) => r.entity)].filter(Boolean);
       this._built = false;
       this._seen.clear();
       this._pending = null;
@@ -642,7 +646,7 @@
       card.append(h('div', { class: 'head' }, [zone, this._chips]));
 
       // body
-      const body = h('div', { class: c.rooms.length ? 'body has-rooms' : 'body' });
+      const body = h('div', { class: `${c.rooms.length ? 'body has-rooms' : 'body'}${c.show_dial === false ? ' no-dial' : ''}` });
       const left = h('div', { class: 'left' });
       const right = h('div', { class: 'right' });
       left.append(this._buildDial());
@@ -1026,6 +1030,9 @@
       const v = m.vals;
       const hasTarget = !m.unavail && m.mode !== 'off' && (m.single || m.dual);
       const ref = hasTarget ? null : m.current;
+      // target: an external target sensor (e.g. a comfort controller's) is what rooms are compared with
+      const ts = this._config.target ? this._hass.states[this._config.target] : null;
+      const ext = ts && isNum(ts.state) ? Number(ts.state) : null;
       const temps = [];
       for (const r of this._roomEls) {
         const st = this._hass.states[r.cfg.entity];
@@ -1043,7 +1050,8 @@
         const t = Number(st.state);
         temps.push(t);
         let delta = null;
-        if (hasTarget && m.single) delta = t - v.temp;
+        if (ext !== null) delta = t - ext;
+        else if (hasTarget && m.single) delta = t - v.temp;
         else if (hasTarget && m.dual) delta = t < v.low ? t - v.low : t > v.high ? t - v.high : 0;
         else if (ref !== null) delta = t - ref;
         const { tone, k } = delta === null ? { tone: 'neutral', k: 0 } : toneFor(delta, scale);
@@ -1054,11 +1062,11 @@
         r.el.style.setProperty('--tpn', String(Math.round(k * 40)));
         r.el.style.setProperty('--tc', `${Math.round(k * 70)}%`);
         r.tv.replaceChildren(document.createTextNode(fmtTemp(t, 1)), h('small', { text: '°' }));
-        r.dl.textContent = delta === null ? '' : (hasTarget && m.dual && delta === 0 ? 'In range' : fmtDelta(delta));
+        r.dl.textContent = delta === null ? '' : (ext === null && hasTarget && m.dual && delta === 0 ? 'In range' : fmtDelta(delta));
         r.dl.hidden = delta === null;
         const pos = delta === null ? 50 : clamp(50 + (delta / (scale * 2)) * 50, 4, 96);
         r.pip.style.left = `${pos}%`;
-        const vs = hasTarget ? (m.dual ? 'the range' : 'target') : 'zone';
+        const vs = ext !== null ? 'target' : hasTarget ? (m.dual ? 'the range' : 'target') : 'zone';
         r.el.setAttribute('aria-label', `${r.nm.textContent}: ${fmtTemp(t, 1)}°${delta === null ? '' : `, ${fmtDelta(delta)} vs ${vs}`}`);
       }
       if (temps.length >= 2) {
@@ -1072,7 +1080,11 @@
       const c = this._config;
       const cells = [];
       const deg = (v, u) => [document.createTextNode(u === '%' ? String(Math.round(v)) : Number(v).toFixed(1)), h('small', { text: u || '°' })];
-      cells.push(['Indoor', m.current !== null && !m.unavail ? deg(m.current) : [document.createTextNode('—')]]);
+      const fs = c.feels_like ? this._hass.states[c.feels_like] : null;
+      if (fs && isNum(fs.state)) cells.push(['Feels like', deg(Number(fs.state))]);
+      const tg = c.target ? this._hass.states[c.target] : null;
+      if (tg && isNum(tg.state)) cells.push(['Target', deg(Number(tg.state))]);
+      cells.push([c.feels_like ? 'Thermostat' : 'Indoor', m.current !== null && !m.unavail ? deg(m.current) : [document.createTextNode('—')]]);
       if (temps.length) {
         const avg = temps.reduce((x, y) => x + y, 0) / temps.length;
         cells.push(['Rooms avg', deg(avg)]);

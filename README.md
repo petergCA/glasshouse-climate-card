@@ -66,6 +66,9 @@ For the full look, pair it with the **Glasshouse** theme.
 | `icon` | string | `mdi:thermostat` | Header icon. |
 | `humidity` | entity | – | Humidity sensor for the chip. Without it, the thermostat's `current_humidity` is used when present. |
 | `outside` | entity | – | Outdoor temperature sensor, shown as "Outside 58°". |
+| `show_dial` | boolean | `true` | `false` hides the dial, modes and fan: a read-only zone summary (stats + rooms), e.g. when an automation or integration owns the setpoint. |
+| `target` | entity | – | A target-temperature sensor to compare rooms with instead of the thermostat's setpoint (e.g. a comfort controller's target). Also shown as a **Target** stat. |
+| `feels_like` | entity | – | A feels-like sensor, shown first in the stats strip (the thermostat reading is then labelled **Thermostat**). |
 | `rooms` | list | – | Room temperature sensors, as entity ids or `{entity, name}` objects. |
 | `show_modes` | boolean | `true` | Show the hvac mode control. |
 | `show_fan` | boolean | `false` | Show fan mode chips (when the entity has `fan_modes`). |
