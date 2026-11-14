@@ -6,7 +6,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const TAG = 'glasshouse-climate-card';
 
   const DEBOUNCE_MS = 800;      // set_temperature is called this long after the last change
@@ -364,8 +364,16 @@
     .stat .v small { font-size: 13px; font-weight: 600; color: var(--gh-text-2); margin-left: 1px; vertical-align: 0.7em; }
     .stat .v.acc { color: var(--acc); }
     .stat .lbl { overflow: hidden; text-overflow: ellipsis; }
+    /* read-only (no dial) cards keep the stats on narrow widths too, wrapping into as few rows as fit */
+    .body.no-dial .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border);
+      grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 10px; }
+    .body.no-dial .stat .v { font-size: 20px; }
     @container gh-clim (min-width: 640px) {
-      .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border); }
+      /* one row: every stat gets an equal column; values scale with the card width so they stay on one line */
+      .stats, .body.no-dial .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border);
+        grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+      .stat .v, .body.no-dial .stat .v { font-size: clamp(19px, 3.2cqi, 26px); }
+      .stat .lbl { white-space: nowrap; letter-spacing: .06em; }
       ha-card.has-rooms .chips { display: none; }
       .room { padding: 13px 14px 14px; gap: 8px; }
       .room .tv { font-size: 26px; }
