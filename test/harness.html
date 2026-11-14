@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glasshouse Climate Card harness</title>
+<!--
+  Offline test harness. Open directly (file://) in a browser.
+  ?layout=phone    -> one column of every state (heating, cooling, heat_cool, off, unavailable)
+  ?layout=desktop  -> full-width and half-width cards
+  ?layout=preview  -> the composition used for docs/preview.png
+  &pw=<px>         -> phone column width (headless Chrome has a minimum window width)
+  &sim=<value>     -> drag the first card's dial to <value> (real layout, real pointer events)
+  (no query)       -> phone + desktop side by side, with a call log
+  Stubs for ha-card / ha-icon and a mock hass (mock-hass.js) stand in for Home Assistant.
+-->
+<style>
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    color: #e9eef6;
+    font-family: -apple-system, "SF Pro Text", Inter, Roboto, system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 700px at 12% -10%, rgba(88,166,255,0.16), transparent 60%),
+      radial-gradient(900px 600px at 95% 5%, rgba(255,122,89,0.10), transparent 60%),
+      radial-gradient(1000px 800px at 50% 120%, rgba(77,214,232,0.08), transparent 60%),
+      linear-gradient(180deg, #070b13 0%, #0a1020 55%, #070b13 100%) fixed;
+  }
+  .page { display: flex; gap: 28px; padding: 20px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .phone { flex: 0 0 390px; width: 390px; padding: 8px; box-sizing: border-box; }
+  .wide { flex: 1 1 auto; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  h6 { margin: 4px 0 0; font: 600 11px/1 system-ui; letter-spacing: .09em; text-transform: uppercase; color: #5d697d; }
+  #log { font: 11px/1.4 ui-monospace, monospace; color: #5d697d; white-space: pre-wrap; padding: 0 20px; }
+  body.l-phone .page { padding: 0; }
+  body.l-phone .phone { padding: 12px; }
+  body.l-desktop .page { padding: 24px; }
+  body.l-preview .page { gap: 22px; padding: 28px; }
+  body.l-preview .phone { padding: 0; flex-basis: 380px; width: 380px; }
+</style>
+<script src="icons.js" onerror="window.GH_TEST_ICONS = {}"></script>
+<script>
+  customElements.define('ha-card', class extends HTMLElement {});
+  function svgFor(name) {
+    const d = (window.GH_TEST_ICONS || {})[name];
+    if (!d) {
+      const label = String(name || '?').replace('mdi:', '').slice(0, 2).toUpperCase();
+      return `<span style="font:700 9px system-ui;letter-spacing:-.02em">${label}</span>`;
+    }
+    return `<svg viewBox="0 0 24 24" width="100%" height="100%" style="display:block;fill:currentColor"><path d="${d}"></path></svg>`;
+  }
+  class StubIcon extends HTMLElement {
+    static get observedAttributes() { return ['icon']; }
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' }).innerHTML =
+        '<style>:host{display:inline-flex;width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);align-items:center;justify-content:center;vertical-align:middle}</style><span style="display:contents"></span>';
+    }
+    set icon(v) { this._icon = v; this._render(); }
+    get icon() { return this._icon; }
+    attributeChangedCallback(n, o, v) { this._icon = v; this._render(); }
+    _render() { this.shadowRoot.querySelector('span').innerHTML = svgFor(this._icon); }
+  }
+  customElements.define('ha-icon', StubIcon);
+</script>
+<script src="mock-hass.js"></script>
+<script src="../glasshouse-climate-card.js"></script>
+</head>
+<body>
+<div class="page">
+  <div class="col phone" id="phone"></div>
+  <div class="col wide" id="wide"></div>
+</div>
+<pre id="log"></pre>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const layout = q.get('layout') || 'all';
+  document.body.classList.add(`l-${layout}`);
+  if (q.get('pw')) { const p = document.getElementById('phone'); p.style.width = p.style.flexBasis = `${Number(q.get('pw'))}px`; }
+  const mock = GHMock.createHass();
+  window.mock = mock;
+
+  const R = (n) => ({ entity: `sensor.room_${n}` });
+  const ROOMS_A = [{ entity: 'sensor.room_1', name: 'Kitchen' }, { entity: 'sensor.room_2', name: 'Living Room' },
+    { entity: 'sensor.room_4', name: 'Dining' }, { entity: 'sensor.room_3', name: 'Office' }];
+  const HEAT = { entity: 'climate.zone_a', name: 'Downstairs', humidity: 'sensor.zone_a_humidity',
+    outside: 'sensor.outdoor_temp', rooms: ROOMS_A };
+  const COOL = { entity: 'climate.zone_b', outside: 'sensor.outdoor_temp', rooms: [R(5), R(6), R(7)] };
+  const DUAL = { entity: 'climate.zone_c', outside: 'sensor.outdoor_temp', rooms: [R(3), R(2), R(7), R(1)] };
+  const OFF = { entity: 'climate.zone_d', rooms: [R(5), R(4)] };
+  const UNAV = { entity: 'climate.zone_e', rooms: [R(8), R(1)] };
+
+  const cards = [];
+  function add(parent, config, label) {
+    const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-direction:column;gap:8px;min-width:0';
+    if (label) { const l = document.createElement('h6'); l.textContent = label; box.append(l); }
+    const el = document.createElement('glasshouse-climate-card');
+    el.setConfig(config);
+    box.append(el);
+    parent.append(box);
+    cards.push(el);
+    return el;
+  }
+  const phone = document.getElementById('phone');
+  const wide = document.getElementById('wide');
+  const row = () => { const r = document.createElement('div'); r.className = 'row'; wide.append(r); return r; };
+
+  if (layout === 'phone') {
+    phone.parentElement.removeChild(wide);
+    add(phone, { ...HEAT, show_fan: true }, 'heating · fan');
+    add(phone, COOL, 'cooling · 0.5 step');
+    add(phone, DUAL, 'heat_cool');
+    add(phone, OFF, 'off');
+    add(phone, UNAV, 'unavailable');
+    add(phone, { entity: 'climate.zone_m', name: 'Basement' }, 'no rooms · °C');
+  } else if (layout === 'desktop') {
+    phone.remove();
+    add(wide, { ...HEAT, show_fan: true, rooms: [...ROOMS_A, R(5), R(6), R(7)] }, '12 columns · heating · fan');
+    add(wide, DUAL, '12 columns · heat_cool');
+    const r = row();
+    add(r, COOL, '6 columns · cooling');
+    add(r, OFF, '6 columns · off');
+    const r2 = row();
+    add(r2, UNAV, '6 columns · unavailable');
+    add(r2, { entity: 'climate.zone_m', name: 'Basement' }, '6 columns · no rooms');
+  } else if (layout === 'preview') {
+    add(phone, { ...HEAT, show_fan: false });
+    add(wide, { ...DUAL, rooms: [R(3), R(2), R(7), R(1), R(4), R(5)] });
+    const r = row();
+    add(r, COOL);
+    add(r, OFF);
+  } else {
+    add(phone, { ...HEAT, show_fan: true }, 'phone · heating');
+    add(phone, DUAL, 'phone · heat_cool');
+    add(wide, { ...HEAT, show_fan: true }, 'wide · heating');
+    const r = row();
+    add(r, COOL, 'half · cooling');
+    add(r, UNAV, 'half · unavailable');
+  }
+  mock.subscribe((hass) => cards.forEach((el) => { el.hass = hass; }));
+
+  // ?sim=<value>: drag the first card's dial to <value> with real layout and pointer events.
+  if (q.get('sim')) {
+    setTimeout(() => {
+      const card = cards[0];
+      const svg = card.shadowRoot.querySelector('svg');
+      const st = mock.current.states[card._config.entity].attributes;
+      const r = svg.getBoundingClientRect();
+      const at = (v) => {
+        const ang = ((135 + 270 * ((v - st.min_temp) / (st.max_temp - st.min_temp))) * Math.PI) / 180;
+        return { clientX: r.left + (r.width / 240) * (120 + 92 * Math.cos(ang)), clientY: r.top + (r.height / 240) * (120 + 92 * Math.sin(ang)) };
+      };
+      const fire = (type, v) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, button: 0, ...at(v) }));
+      const target = Number(q.get('sim'));
+      const start = st.temperature != null ? st.temperature : st.target_temp_low;
+      fire('pointerdown', start);
+      fire('pointermove', (start + target) / 2);
+      fire('pointermove', target);
+      const l = card.parentElement.querySelector('h6');
+      if (l) l.textContent += ` · sim ${target} · rect ${Math.round(r.width)}`;
+    }, 200);
+  }
+
+  const log = document.getElementById('log');
+  if (layout === 'all') {
+    document.addEventListener('hass-more-info', (e) => { log.textContent += `more-info ${e.detail.entityId}\n`; });
+    setInterval(() => {
+      log.textContent = mock.calls.slice(-8).map((c) => `${c.domain}.${c.service} ${JSON.stringify(c.data)}`).join('\n');
+    }, 500);
+  } else log.remove();
+})();
+</script>
+</body>
+</html>
