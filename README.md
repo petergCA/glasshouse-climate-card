@@ -69,6 +69,8 @@ For the full look, pair it with the **Glasshouse** theme.
 | `rooms` | list | – | Room temperature sensors, as entity ids or `{entity, name}` objects. |
 | `show_modes` | boolean | `true` | Show the hvac mode control. |
 | `show_fan` | boolean | `false` | Show fan mode chips (when the entity has `fan_modes`). |
+| `min_temp` / `max_temp` | number | entity's range | Dial range. Many thermostats report a very wide range (e.g. 32–122 °F); set e.g. `55` / `85` for a usable dial. Setpoints outside are still shown at the ends. |
+| `min_gap` | number | `2` (°F) / `1` (°C) | Smallest gap kept between the two heat_cool setpoints (some thermostats need 3 °F). |
 | `scale` | number | `2` (°F) / `1` (°C) | Degrees from the setpoint at which a room chip is fully cool or warm. Within a quarter of this a room is neutral. |
 
 ### Interaction

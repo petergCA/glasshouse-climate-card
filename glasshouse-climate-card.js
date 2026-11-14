@@ -1,12 +1,12 @@
 /*!
- * Glasshouse Climate Card v1.0.0
+ * Glasshouse Climate Card v1.1.0
  * A dial thermostat for one HVAC zone, with the zone's rooms beside it.
  * Part of the Glasshouse card suite. MIT License (c) 2026 Peter Gray.
  */
 (() => {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const TAG = 'glasshouse-climate-card';
 
   const DEBOUNCE_MS = 800;      // set_temperature is called this long after the last change
@@ -572,6 +572,9 @@
       const step = Number(a.target_temp_step) > 0 ? Number(a.target_temp_step) : (celsius ? 0.5 : 1);
       let min = isNum(a.min_temp) ? Number(a.min_temp) : (celsius ? 7 : 45);
       let max = isNum(a.max_temp) ? Number(a.max_temp) : (celsius ? 35 : 95);
+      const c = this._config || {};
+      if (isNum(c.min_temp)) min = Number(c.min_temp);
+      if (isNum(c.max_temp)) max = Number(c.max_temp);
       if (max <= min) max = min + step * 10;
       const mode = this._pendingMode ? this._pendingMode.mode : (unavail ? 'unavailable' : st.state);
       const dual = !unavail && isNum(a.target_temp_low) && isNum(a.target_temp_high) && !isNum(a.temperature);
@@ -580,7 +583,7 @@
       return {
         st, a, unavail, celsius, step, min, max, mode, dual: dual && !!vals, single: single && !!vals,
         vals, action: a.hvac_action, current: isNum(a.current_temperature) ? Number(a.current_temperature) : null,
-        gap: celsius ? 1 : 2,
+        gap: Number(c.min_gap) > 0 ? Number(c.min_gap) : (celsius ? 1 : 2),
       };
     }
 
