@@ -6,7 +6,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const TAG = 'glasshouse-climate-card';
 
   const DEBOUNCE_MS = 800;      // set_temperature is called this long after the last change
@@ -366,14 +366,18 @@
     .stat .lbl { overflow: hidden; text-overflow: ellipsis; }
     /* read-only (no dial) cards keep the stats on narrow widths too, wrapping into as few rows as fit */
     .body.no-dial .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border);
-      grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 10px; }
-    .body.no-dial .stat .v { font-size: 20px; }
+      grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+    .body.no-dial .stat .v { font-size: clamp(17px, 4.2cqi, 22px); }
+    .body.no-dial .stat .lbl { white-space: nowrap; letter-spacing: .04em; font-size: 10px; }
+    /* narrow: outside and humidity are already in the header chips, so the stats row drops them to stay on one line */
+    .body.no-dial .stat.dup { display: none; }
     @container gh-clim (min-width: 640px) {
       /* one row: every stat gets an equal column; values scale with the card width so they stay on one line */
       .stats, .body.no-dial .stats { display: grid; padding-bottom: 14px; border-bottom: 1px solid var(--gh-border);
         grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
       .stat .v, .body.no-dial .stat .v { font-size: clamp(19px, 3.2cqi, 26px); }
-      .stat .lbl { white-space: nowrap; letter-spacing: .06em; }
+      .stat .lbl, .body.no-dial .stat .lbl { white-space: nowrap; letter-spacing: .06em; font-size: 11px; }
+      .body.no-dial .stat.dup { display: flex; }
       ha-card.has-rooms .chips { display: none; }
       .room { padding: 13px 14px 14px; gap: 8px; }
       .room .tv { font-size: 26px; }
@@ -1102,11 +1106,11 @@
         cells.push(['Spread', deg(spread)]);
       }
       const os = c.outside ? this._hass.states[c.outside] : null;
-      if (os && isNum(os.state)) cells.push(['Outside', deg(Number(os.state))]);
+      if (os && isNum(os.state)) cells.push(['Outside', deg(Number(os.state)), 'dup']);
       const hs = c.humidity ? this._hass.states[c.humidity] : null;
       const hum = hs && isNum(hs.state) ? Number(hs.state) : (!c.humidity && isNum(m.a.current_humidity) ? Number(m.a.current_humidity) : null);
-      if (hum !== null) cells.push(['Humidity', deg(hum, '%')]);
-      this._stats.replaceChildren(...cells.map(([k, v], i) => h('div', { class: 'stat' }, [
+      if (hum !== null) cells.push(['Humidity', deg(hum, '%'), 'dup']);
+      this._stats.replaceChildren(...cells.map(([k, v, x], i) => h('div', { class: x ? `stat ${x}` : 'stat' }, [
         h('span', { class: 'lbl', text: k }), h('span', { class: i === 0 && this._card.classList.contains('active') ? 'v acc' : 'v' }, v),
       ])));
     }
